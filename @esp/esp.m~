@@ -1,0 +1,152 @@
+classdef esp < gpibio
+    
+    properties
+        axis1 = struct('Model', '',...
+                       'SN', '', ...
+                       'Position', 0, ...
+                       'Velocity', 0, ...
+                       'Acceleration', 0, ...
+                       'MotorOn', -1);
+        axis2 = struct('Model', '',...
+                       'SN', '', ...
+                       'Position', 0, ...
+                       'Velocity', 0, ...
+                       'Acceleration', 0, ...
+                       'MotorOn', -1);
+        axis3 = struct('Model', '',...
+                       'SN', '', ...
+                       'Position', 0, ...
+                       'Velocity', 0, ...
+                       'Acceleration', 0, ...
+                       'MotorOn', -1);
+    end
+    
+    methods
+        function esp_obj = esp(board, pad)
+            % constructs an ESP instance
+            esp_obj = esp_obj@gpibio(board, pad, 0, 13, 1, 0);
+            
+            for axis = 1:3
+                esp_obj.getID(axis);
+                esp_obj.getPosition(axis);
+                esp_obj.getVelocity(axis);
+                esp_obj.getAcceleration(axis);
+                esp_obj.getMotorOn(axis);
+            end
+        end
+        
+        function disp(esp)
+            
+        end
+        
+        function esp = set.axis1(esp,prop)
+            esp.axis1 = prop;
+        end
+        function esp = set.axis2(esp,prop)
+            esp.axis2 = prop;
+        end
+        function esp = set.axis3(esp,prop)
+            esp.axis3 = prop;
+        end
+        
+        % Higher Level Commands
+        function move(esp, axis, pos)
+            MD = 0;
+            esp.moveAbsolute(axis, pos);
+            while MD==0
+                pause(0.1);
+                MD = esp.getMoveDone(axis);
+            end
+        end
+        
+        function esp = abortMotion(esp)
+            % Emergency stop all axes, and turn motors off.
+            esp.write('AB')
+            esp.axis1.MotorOn = 0;
+            esp.axis2.MotorOn = 0;
+            esp.axis3.MotorOn = 0;
+        end
+        function esp = setAcceleration(esp, axis, value)
+            % Sets the acceleration for an axis. Result is immediate even
+            % if axis is currently in motion
+            esp.write(sprintf('%i%s%f',axis, 'AC', value));
+            esp.(sprintf('%s%i', 'axis', axis)).Acceleration = value;
+        end
+        function accel = getAcceleration(esp, axis)
+            % gets the acceleration for an axis. 
+            accel = sscanf(esp.ask(sprintf('%i%s',axis, 'AC?')), '%f');
+            esp.(sprintf('%s%i', 'axis', axis)).Acceleration = accel;
+            assignin('caller', inputname(1), esp);
+        end
+        function defineHome(esp, axis, pos)
+            % Define the home position for an axis. 
+            esp.write(sprintf('%i%s%f',axis, 'DH', pos));
+        end
+        function MD = getMoveDone(esp, axis)
+            % ask if move is done 
+            MD = sscanf(esp.ask(sprintf('%i%s',axis, 'MD')), '%i');
+        end
+        function MF = getMotorOff(esp, axis)
+            % Ask if motor is off
+            MF = esp.ask(sprintf('%i%s',axis, 'MF?'));
+        end
+        function esp = setMotorOff(esp, axis)
+            % Turns motor off
+            esp.write(sprintf('%i%s',axis, 'MF'));
+            esp.(sprintf('%s%i', 'axis', axis)).MotorOn = 0;
+        end
+        function MO = getMotorOn(esp, axis)
+            % Ask if motor is off
+            MO = sscanf(esp.ask(sprintf('%i%s',axis, 'MO?')),'%i');
+            esp.(sprintf('%s%i', 'axis', axis)).MotorOn = MO;
+            assignin('caller', inputname(1), esp);
+        end
+        function esp = setMotorOn(esp, axis)
+            % Turns motor off
+            esp.write(sprintf('%i%s',axis, 'MO'));
+            esp.(sprintf('%s%i', 'axis', axis)).MotorOn = 1;
+        end
+        function moveAbsolute(esp, axis, pos)
+            % Move axis to absolute position
+            esp.write(sprintf('%i%s%f',axis, 'PA',pos));
+        end
+        function moveRelative(esp, axis, dist)
+            % Move axis a relative distance
+            esp.write(sprintf('%i%s%f',axis, 'PR',dist));
+        end
+        function error = getError(esp)
+            % get error messages
+            error = esp.ask('TB?');
+        end
+        function pos = getPosition(esp, axis)
+            % Get position of axis
+            pos = sscanf(esp.ask(sprintf('%i%s',axis, 'TP')), '%f');
+            esp.(sprintf('%s%i', 'axis', axis)).Position = pos;
+            assignin('caller', inputname(1), esp);
+        end
+        function vel = getVelocity(esp, axis)
+            % Get position of axis
+            vel = sscanf(esp.ask(sprintf('%i%s',axis, 'VA?')), '%f');
+            esp.(sprintf('%s%i', 'axis', axis)).Velocity = vel;
+            assignin('caller', inputname(1), esp);
+        end
+        function esp = setVelocity(esp, axis, vel)
+            % Get position of axis
+            esp.write(sprintf('%i%s%f',axis, 'VA', vel));
+            esp.(sprintf('%s%i', 'axis', axis)).Velocity = vel;
+        end
+        function [model, SN] = getID(esp, axis)
+            s = regexp(esp.ask(sprintf('%i%s', axis, 'ID')), ',', 'split');
+            model = s{1};
+            try
+                tempstring = deblank(s(2));
+                SN = tempstring{1}(4:end);
+            catch
+                SN = '';
+            end
+            esp.(sprintf('%s%i', 'axis', axis)).Model = model;
+            esp.(sprintf('%s%i', 'axis', axis)).SN = SN;
+            assignin('caller', inputname(1), esp);
+        end
+    end
+end

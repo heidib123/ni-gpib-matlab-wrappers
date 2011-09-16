@@ -1,0 +1,7 @@
+function tdisp(name)
+              disp(' ')
+              disp([inputname(1) ' =']);
+              sprintf('%s%i','    axis 1: ')
+              sprintf('','    axis 2: ')
+              sprintf('','    axis 3: ')
+end

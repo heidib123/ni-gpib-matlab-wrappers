@@ -1,0 +1,96 @@
+function [v1 v2 v3] = get_boxcar3chan(boxcar, samples, normalize, trigger_rate )
+%GET_BOXCAR3CHAN Output voltage of boxcar channels 1,2,3
+%   [vout1, vout2, vout3 ] = get_boxcar3chan( normalize )
+
+    value = 0;
+    loops = 0;
+    while value<0.7
+        if loops ==10 % only try 10 times
+            disp('Channels poorly correlated')
+        else
+            loops = loops +1;
+        end
+        
+        boxcar.write('C');  % set digital port to input counter and reset counter
+        boxcar.write(sprintf('%c%i','T', trigger_rate));  % set every trigger_rate number of pulse to be a trigger
+        boxcar.write(sprintf('%s%i','SC1,2,3:', samples)); % scan analog ports 1,2,3 for samples number of triggers
+
+        % find out how many samples were taken
+        N = str2double(boxcar.ask(sprintf('%s','?N'))); % get number of measurements
+        while (N==0) || (isnan(N))
+            N = str2double(boxcar.ask(sprintf('%s','?N')));
+        end
+        vout=NaN(3,N); % preallocate vout to number of samples actually measured
+        for i=1:N   % loop through number of samples measured
+            for channel=1:3  % loop through data channels
+                while isnan(vout(channel,i))  % wait until a number is returned
+                    buff = boxcar.ask('N');   % ask for voltage of chan
+                    for k=1:20
+                        if isnan(str2double(buff))                 % throw out garbage
+                            buff = boxcar.read;
+                            if k==20
+                                error('Buffer is emtpy for 20 rounds!')
+                            end
+                        else
+                            break;
+                        end
+                    end
+                    vout(channel,i) = str2double(buff);
+                end                                       % while no data in buffer loop
+            end                                          % j=1:3 channels for loop 
+        end% i= 1:N samples
+        vout1 = vout(1,:); vout2 = vout(2,:); vout3 = vout(3,:);
+        % find best pulse alignment
+        a = -1:1;
+        for i = 1:length(a)  % calculate correlations
+                c12(1,i) = corr2(vout1(2+a(i):N-1+a(i)), vout2(2:N-1)); 
+                c23(1,i) = corr2(vout2(2:N-1), vout3(2:N-1)); 
+                c13(1,i) = corr2(vout1(2+a(i):N-1+a(i)), vout3(2:N-1));
+                c12(2,i) = corr2(vout1(2:N-1), vout2(2+a(i):N-1+a(i))); 
+                c23(2,i) = corr2(vout2(2+a(i):N-1+a(i)), vout3(2:N-1)); 
+                c13(2,i) = corr2(vout1(2:N-1), vout3(2:N-1));
+                c12(3,i) = corr2(vout1(2:N-1), vout2(2:N-1)); 
+                c23(3,i) = corr2(vout2(2:N-1), vout3(2+a(i):N-1+a(i))); 
+                c13(3,i) = corr2(vout1(2:N-1), vout3(2+a(i):N-1+a(i)));
+        end
+        
+        for chan=1:3  % collapse correlation matrices
+            for i = 1:3
+                m(chan,i) = mean([c12(chan, i) c13(chan, i) c23(chan, i)]);
+            end
+        end
+        % find maximum correlation
+        [v,chan] = max(m);
+        [value, i] = max(v);
+        chan = chan(i);
+    end
+    
+    switch chan  % realign signals
+        case 1
+            vout1 = vout1(2+a(i):N-1+a(i));
+            vout2 = vout2(2:N-1);
+            vout3 = vout3(2:N-1);
+        case 2
+            vout1 = vout1(2:N-1);
+            vout2 = vout2(2+a(i):N-1+a(i));
+            vout3 = vout3(2:N-1);
+        case 3
+            vout1 = vout1(2:N-1);
+            vout2 = vout2(2:N-1);
+            vout3 = vout3(2+a(i):N-1+a(i));
+    end
+    
+    if normalize  % normalize if needed
+        v1 = vout1./vout2;
+        v3 = vout3./vout2;  
+    else
+        v1 = vout1;
+        v3 = vout3;
+    end
+    v2 = vout2;
+    % remove outliers
+    good_pts = find(~(abs(v2-mean(v2))>1.5*std(v2)));
+    v1 = v1(good_pts);
+    v2 = v2(good_pts);
+    v3 = v3(good_pts);
+end

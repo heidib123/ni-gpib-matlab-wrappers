@@ -1,0 +1,140 @@
+classdef boxcar < gpibio
+    
+    properties
+        
+    end
+    
+    methods
+        function boxcar_obj = boxcar(board, pad)
+            boxcar_obj = boxcar_obj@gpibio(board, pad, 0, 13, 1, 0);
+        end
+        
+        % input/output methods
+        function setAnalogInputs(boxcar, n)
+            % Designates the first n analog ports as inputs, the remainder become outputs
+            boxcar.write(sprintf('%c%i','I' ,n));
+        end
+        function resetCounter(boxcar)
+            % Configures B2 as an input and resets the B2 counter
+            boxcar.write('C');
+        end
+        function setBit(boxcar, bit, setting)
+            % Configures 'bit' as an input if setting = 'I' or configures as 
+            % an output and sets 'bit' if setting = 0,1
+            if setting ==0 || setting ==1
+                boxcar.write(sprintf('%s%i%c%i','SB', bit, '=',setting))
+            elseif setting =='I'
+                boxcar.write(sprintf('%s%i%c%i','SB', bit, '=I'))
+            else
+                error('setting must be 0, 1, or "I"')
+            end
+        end
+        function setDigital(boxcar, n)
+            % Sets the 8-bit digital output port to the value n (n = 0 to 255 )
+            if n >= 0 && n<=255
+                boxcar.write(sprintf('%s%i','SD=', n));
+            else
+                error('n = 0 to 255');
+            end
+        end
+        function setMask(boxcar, n)
+            % Sets the GPIB SRQ mask to the value n (n = 0 to 255)
+            if n >= 0 && n<=255
+                boxcar.write(sprintf('%s%i','SM=', n));
+            else
+                error('n = 0 to 255');
+            end
+        end
+        function setSync(boxcar, mode)
+            if mode == 'A' || mode == 'a' || mode == 'Async'|| mode == 'async' || mode == 'asynchronous' || mode == 'Asynchronous'
+                boxcar.write('MA');
+            elseif mode == 'S' || mode == 's' || mode == 'sync'|| mode == 'Sync' || mode == 'synchronous' || mode == 'Synchronous' || mode == 'Default' || mode == 'default'
+                boxcar.write('MS');
+            end
+        end
+        function setAnalog(boxcar, port, voltage)
+            boxcar.write(sprintf('%c%i%c%f','S', port, '=',voltage));
+        end
+        function setTrigger(boxcar, n)
+            % Designates every nth pulse at B1 as a trigger (n=1 to 32,767)
+            if n >= 0 && n<=32767
+                boxcar.write(sprintf('%c%i','T',n));
+            else
+                error('n = 1 to 32,767')
+            end
+        end
+        function maskTrigger(boxcar)
+            % Masks the trigger input so that no triggers are recognized
+            boxcar.write('DT');
+        end
+        function unmaskTrigger(boxcar)
+            % Unmasks the trigger input
+            boxcar.write('ET');
+        end
+        function masterReset(boxcar)
+            % Returns the SR245 to its default values
+            boxcar.write('MR');
+        end
+        function pulseBit(boxcar, bit)
+            % Outputs a 10 microsecond TTL pulse at digital port n = 1 or 2
+            boxcar.write(sprintf('%s%i','PB', bit));
+        end
+        function pulseEvery(boxcar, n)
+            % Outputs a 10 microsecond pulse at B2 each nth trigger (n=1:255)
+            boxcar.write(sprintf('%s%i','P/', n));
+        end
+        function voltage = getAnalog(boxcar, port)
+            % Returns the value of the designated analog port
+            voltage = sscanf(boxcar.ask(sprintf('%c%i','?', port)), '%f');
+        end
+        function value = getBit(boxcar, bit)
+            % Returns the value (0 or 1) of the designated digital port
+            boxcar.write(sprintf('%s%i','?B', bit));
+            sscanf(boxcar.ask(sprintf('%c%i','?', port)), '%f')
+            value = boxcar.read;
+        end
+        function dig = getDigital(boxcar)
+            % Returns the value of the 8 bit digital port
+            boxcar.write('?D');
+            dig = boxcar.read;
+        end
+        function byte = getStatusByte(boxcar)
+            % Returns the value of and clears the status byte
+            boxcar.write('?S');
+            byte = boxcar.read;
+        end
+        function counts = getCounter(boxcar)
+            % Returns the number of pulses occuring at B2 since the
+            % previous getCounter() or resetCounter().
+            boxcar.write('?C');
+            counts = boxcar.read;
+        end
+        
+        % Scan Methods
+        function startScan(boxcar, ports, n)
+            % Scans the list of ports for n triggers. Total samples may not
+            % exceed 3711.
+            cmd = 'SC';
+            for i = 1:length(ports)
+                cmd = [cmd sprintf('%i%c', ports(i), ',')];
+            end
+            cmd = [cmd sprintf('%c%i', ':', n)];
+            boxcar.write(cmd);
+        end
+        function stopScan(boxcar)
+            % Ends the current scan immediately and resets the point
+            % sending counter.
+            boxcar.write('ES');
+        end
+        function N = getNumPts(boxcar)
+            % Return the number of points scanned
+            boxcar.write('?N');
+            N = boxcar.read;
+        end
+        function V = getNextPt(boxcar)
+            % Sends the next point of stored scan
+            boxcar.write('N')
+            V = boxcar.read;
+        end 
+    end
+end

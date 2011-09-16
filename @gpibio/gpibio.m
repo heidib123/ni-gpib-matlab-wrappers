@@ -26,6 +26,8 @@ classdef gpibio < instr
         ibcnt   = 0   % length of buffer from last read
         ibsta   = 0   % status
         iberr   = 0   % error
+        board   = 0   % board number
+        pad     = 0   % primary address
     end % of private access properties
     
     methods

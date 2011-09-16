@@ -13,6 +13,8 @@ function gpib = ibdev(gpib, brd, pad, sad, tmo, send_eoi, eos)
     % whether or not its reception should terminate reads (see  ibeos()).
     
     gpib.ud = calllib('gpib32', 'ibdev', brd,pad,sad,tmo,send_eoi,eos); 
+    gpib.board = brd;
+    gpib.pad   = pad;
     gpib.ibsta = calllib('gpib32', 'ThreadIberr');
     assignin('caller', inputname(1), gpib);
 end
